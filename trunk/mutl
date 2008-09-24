@@ -1,0 +1,114 @@
+#!/usr/bin/python
+import os
+from os import symlink
+import magic
+from mutagen.easyid3 import EasyID3
+from mutagen.mp3 import MP3
+from mutagen.mp3 import MPEGInfo
+from mutagen.oggvorbis import OggVorbis
+from mutagen.flac import FLAC
+
+ms = magic.open(magic.MAGIC_NONE)
+ms.load()
+
+sourceDir = "music"
+destDir = "best-quality"
+if (sourceDir[-1] != '/'):
+	sourceDir += '/'
+if (destDir[-1] != '/'):
+	destDir += '/'
+sourceDirLen = len(sourceDir)
+
+def mkdirhier(dir):
+	try:
+		os.makedirs(dir)
+	except OSError, e:
+		if e.errno != 17: raise e
+
+def worse(audio1, audio2):
+	"""return whichever is "worse" of these two, or False if they are incomparable"""
+	if "artist" in audio1 and "title" in audio1 and "artist" in audio2 and "title" in audio2 and audio1["artist"] == audio2["artist"] and audio1["title"] == audio2["title"]:
+		if audio1.__dict__['type'] == "flac":
+			return audio2;
+		elif audio2.__dict__['type'] == "flac":
+			return audio1;
+		elif audio1.__dict__['bitrate'] > audio2.__dict__['bitrate']:
+			return audio2;
+		elif audio2.__dict__['bitrate'] > audio1.__dict__['bitrate']:
+			return audio1;
+		elif audio1.__dict__['type'] == "ogg":
+			return audio2;
+		elif audio2.__dict__['type'] == "ogg":
+			return audio1;
+	return False
+
+def isSlash(c): 
+	return c == "/"
+
+def countSlashes(str):
+	return len(filter(isSlash, str))
+
+filesThisDir = []
+thisDir = ""
+for root, dirs, files in os.walk(sourceDir, topdown=False):
+	for name in files:
+		if root != thisDir:
+			if thisDir:
+				print "dir", thisDir
+				toRemove = []
+				for i, audio in enumerate(filesThisDir):
+#					print "   ", i, audio, audio.__dict__['type']
+					remaining = filesThisDir[i+1:]
+					for j, other in enumerate(remaining):
+#						print "      ", j, other, other.__dict__['type']
+						theWorse = worse(audio, other)
+						if theWorse:
+#							print "         the worse:", theWorse.__dict__['type'], theWorse.__dict__['path'], "at idx", j + i
+							toRemove.append(j + i + 1)
+#				print toRemove
+				toRemove.reverse()
+				for i in toRemove:
+#					print "         removing worse file: ", filesThisDir[i].__dict__['type'], filesThisDir[i].__dict__['path']
+					del filesThisDir[i]
+				subpath = thisDir[sourceDirLen:]
+				for i, audio in enumerate(filesThisDir):
+#					print "   ", i, audio, audio.__dict__['type']
+					destPath = destDir + subpath + "/"
+					print "   ln ", destPath + audio.__dict__["filename"], " -> ", audio.__dict__['path']
+					mkdirhier(destPath)
+					symlink("../" * countSlashes(audio.__dict__['path']) + audio.__dict__['path'], destPath + audio.__dict__["filename"])
+			filesThisDir = []
+			thisDir = root
+
+		path = os.path.join(root, name)
+#		print "file", path
+		type = ms.file(path).lower()
+#		print "type", type
+		if type.find("mp3") >= 0:
+			audio = EasyID3(path)
+#			print audio.keys()
+			mpinfo = MPEGInfo (open (path))
+			audio.__dict__['type'] = "mp3"
+			audio.__dict__['bitrate'] = mpinfo.bitrate
+			audio.__dict__['path'] = path
+			audio.__dict__['filename'] = name
+#			if "artist" in audio and "title" in audio:
+#				print "mp3", audio["artist"], audio["title"], mpinfo.bitrate
+#			print root, " => ",  name
+		elif type.find("ogg") >= 0:
+			audio = OggVorbis(path)
+			audio.__dict__['type'] = "ogg"
+			audio.__dict__['bitrate'] = audio.info.bitrate
+			audio.__dict__['path'] = path
+			audio.__dict__['filename'] = name
+#			if "artist" in audio and "title" in audio:
+#				print "ogg", audio["artist"], audio["title"], audio.info.bitrate
+		elif type.find("flac") >= 0:
+			audio = FLAC(path)
+			audio.__dict__['type'] = "flac"
+#			audio.__dict__['sample_rate'] = audio.info.sample_rate
+			audio.__dict__['path'] = path
+			audio.__dict__['filename'] = name
+		else:
+			continue
+		filesThisDir.append(audio)
