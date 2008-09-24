@@ -69,7 +69,10 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 				toRemove.reverse()
 				for i in toRemove:
 #					print "         removing worse file: ", filesThisDir[i].__dict__['type'], filesThisDir[i].__dict__['path']
-					del filesThisDir[i]
+					if i >= len(filesThisDir):
+						print "this is weird: can't remove", i, "from list of len", len(filesThisDir)
+					else:
+						del filesThisDir[i]
 				subpath = thisDir[sourceDirLen:]
 				for i, audio in enumerate(filesThisDir):
 #					print "   ", i, audio, audio.__dict__['type']
@@ -85,13 +88,17 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 		type = ms.file(path).lower()
 #		print "type", type
 		if type.find("mp3") >= 0:
-			audio = EasyID3(path)
+			try:
+				audio = EasyID3(path)
 #			print audio.keys()
-			mpinfo = MPEGInfo (open (path))
-			audio.__dict__['type'] = "mp3"
-			audio.__dict__['bitrate'] = mpinfo.bitrate
-			audio.__dict__['path'] = path
-			audio.__dict__['filename'] = name
+				mpinfo = MPEGInfo (open (path))
+				audio.__dict__['type'] = "mp3"
+				audio.__dict__['bitrate'] = mpinfo.bitrate
+				audio.__dict__['path'] = path
+				audio.__dict__['filename'] = name
+			except Exception, e:
+				print path, "is not valid:", e
+				continue;
 #			if "artist" in audio and "title" in audio:
 #				print "mp3", audio["artist"], audio["title"], mpinfo.bitrate
 #			print root, " => ",  name
