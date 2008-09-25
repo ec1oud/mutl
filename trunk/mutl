@@ -55,9 +55,11 @@ thisDir = ""
 for root, dirs, files in os.walk(sourceDir, topdown=False):
 	if root != thisDir:
 		if thisDir:
-			print "dir", thisDir
+			print thisDir
 			toRemove = []
 			for i, audio in enumerate(filesThisDir):
+				if i in toRemove:
+					continue
 #				print "   ", i, audio, audio.__dict__['type']
 				remaining = filesThisDir[i+1:]
 				for j, other in enumerate(remaining):
@@ -65,7 +67,11 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 					theWorse = worse(filesThisDir, i, j + i + 1);
 					if theWorse >= 0:
 #						print "         the worse:", theWorse
+						if theWorse in toRemove:
+							continue
 						toRemove.append(theWorse)
+						if theWorse == i:
+							break
 			toRemove.sort(reverse=True)
 #			print toRemove
 #			for i, audio in enumerate(filesThisDir):
