@@ -25,22 +25,24 @@ def mkdirhier(dir):
 	except OSError, e:
 		if e.errno != 17: raise e
 
-def worse(audio1, audio2):
-	"""return whichever is "worse" of these two, or False if they are incomparable"""
+def worse(list, idx1, idx2):
+	"""return whichever is "worse" of these two, or -1 if they are incomparable"""
+	audio1 = list[idx1];
+	audio2 = list[idx2];
 	if "artist" in audio1 and "title" in audio1 and "artist" in audio2 and "title" in audio2 and audio1["artist"] == audio2["artist"] and audio1["title"] == audio2["title"]:
 		if audio1.__dict__['type'] == "flac":
-			return audio2;
+			return idx2;
 		elif audio2.__dict__['type'] == "flac":
-			return audio1;
+			return idx1;
 		elif audio1.__dict__['bitrate'] > audio2.__dict__['bitrate']:
-			return audio2;
+			return idx2;
 		elif audio2.__dict__['bitrate'] > audio1.__dict__['bitrate']:
-			return audio1;
+			return idx1;
 		elif audio1.__dict__['type'] == "ogg":
-			return audio2;
+			return idx2;
 		elif audio2.__dict__['type'] == "ogg":
-			return audio1;
-	return False
+			return idx1;
+	return -1
 
 def isSlash(c): 
 	return c == "/"
@@ -51,42 +53,45 @@ def countSlashes(str):
 filesThisDir = []
 thisDir = ""
 for root, dirs, files in os.walk(sourceDir, topdown=False):
-	for name in files:
-		if root != thisDir:
-			if thisDir:
-				print "dir", thisDir
-				toRemove = []
-				for i, audio in enumerate(filesThisDir):
-#					print "   ", i, audio, audio.__dict__['type']
-					remaining = filesThisDir[i+1:]
-					for j, other in enumerate(remaining):
-#						print "      ", j, other, other.__dict__['type']
-						theWorse = worse(audio, other)
-						if theWorse:
-#							print "         the worse:", theWorse.__dict__['type'], theWorse.__dict__['path'], "at idx", j + i
-							toRemove.append(j + i + 1)
-#				print toRemove
-				toRemove.reverse()
-				for i in toRemove:
-#					print "         removing worse file: ", filesThisDir[i].__dict__['type'], filesThisDir[i].__dict__['path']
-					if i >= len(filesThisDir):
-						print "this is weird: can't remove", i, "from list of len", len(filesThisDir)
-					else:
-						del filesThisDir[i]
-				subpath = thisDir[sourceDirLen:]
-				for i, audio in enumerate(filesThisDir):
-#					print "   ", i, audio, audio.__dict__['type']
-					destPath = destDir + subpath + "/"
-					print "   ln ", destPath + audio.__dict__["filename"], " -> ", audio.__dict__['path']
-					mkdirhier(destPath)
-					symlink("../" * countSlashes(audio.__dict__['path']) + audio.__dict__['path'], destPath + audio.__dict__["filename"])
-			filesThisDir = []
-			thisDir = root
+	if root != thisDir:
+		if thisDir:
+			print "dir", thisDir
+			toRemove = []
+			for i, audio in enumerate(filesThisDir):
+#				print "   ", i, audio, audio.__dict__['type']
+				remaining = filesThisDir[i+1:]
+				for j, other in enumerate(remaining):
+#					print "      ", j, other, other.__dict__['type']
+					theWorse = worse(filesThisDir, i, j + i + 1);
+					if theWorse >= 0:
+#						print "         the worse:", theWorse
+						toRemove.append(theWorse)
+			toRemove.sort(reverse=True)
+#			print toRemove
+#			for i, audio in enumerate(filesThisDir):
+#				print "   ", i, "\t", audio.__dict__['type'], "\t", audio.__dict__['filename']
+			for i in toRemove:
+#				print "         removing worse file: ", filesThisDir[i].__dict__['type'], filesThisDir[i].__dict__['path']
+				if i >= len(filesThisDir):
+					print "this is weird: can't remove", i, "from list of len", len(filesThisDir)
+				else:
+					del filesThisDir[i]
+			subpath = thisDir[sourceDirLen:]
+			for i, audio in enumerate(filesThisDir):
+#				print "   ", i, audio, audio.__dict__['type']
+				destPath = destDir + subpath + "/"
+#				print "   ln ", destPath + audio.__dict__["filename"], " -> ", audio.__dict__['path']
+				mkdirhier(destPath)
+				symlink("../" * countSlashes(audio.__dict__['path']) + audio.__dict__['path'], destPath + audio.__dict__["filename"])
+		filesThisDir = []
+		thisDir = root
 
+	for name in files:
 		path = os.path.join(root, name)
 #		print "file", path
 		type = ms.file(path).lower()
 #		print "type", type
+#		print root, " => ",  name
 		if type.find("mp3") >= 0:
 			try:
 				audio = EasyID3(path)
@@ -101,7 +106,6 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 				continue;
 #			if "artist" in audio and "title" in audio:
 #				print "mp3", audio["artist"], audio["title"], mpinfo.bitrate
-#			print root, " => ",  name
 		elif type.find("ogg") >= 0:
 			audio = OggVorbis(path)
 			audio.__dict__['type'] = "ogg"
