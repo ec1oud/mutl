@@ -5,6 +5,7 @@ import magic
 from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
 from mutagen.mp3 import MPEGInfo
+from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 from mutagen.flac import FLAC
 
@@ -29,7 +30,9 @@ def worse(list, idx1, idx2):
 	"""return whichever is "worse" of these two, or -1 if they are incomparable"""
 	audio1 = list[idx1];
 	audio2 = list[idx2];
-	if "artist" in audio1 and "title" in audio1 and "artist" in audio2 and "title" in audio2 and audio1["artist"] == audio2["artist"] and audio1["title"] == audio2["title"]:
+	if "artist" in audio1 and "title" in audio1 and \
+		"artist" in audio2 and "title" in audio2 and \
+		audio1["artist"] == audio2["artist"] and audio1["title"] == audio2["title"]:
 		if audio1.__dict__['type'] == "flac":
 			return idx2;
 		elif audio2.__dict__['type'] == "flac":
@@ -60,13 +63,13 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 			for i, audio in enumerate(filesThisDir):
 				if i in toRemove:
 					continue
-#				print "   ", i, audio, audio.__dict__['type']
+				#~ print "   ", i, audio, audio.__dict__['type']
 				remaining = filesThisDir[i+1:]
 				for j, other in enumerate(remaining):
-#					print "      ", j, other, other.__dict__['type']
+					#~ print "      ", j, other, other.__dict__['type']
 					theWorse = worse(filesThisDir, i, j + i + 1);
 					if theWorse >= 0:
-#						print "         the worse:", theWorse
+						#~ print "         the worse:", theWorse
 						if theWorse in toRemove:
 							continue
 						toRemove.append(theWorse)
@@ -94,9 +97,8 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 
 	for name in files:
 		path = os.path.join(root, name)
-#		print "file", path
 		type = ms.file(path).lower()
-#		print "type", type
+		#~ print "file of type", type, ":", path
 #		print root, " => ",  name
 		if type.find("mp3") >= 0:
 			try:
@@ -126,6 +128,12 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 #			audio.__dict__['sample_rate'] = audio.info.sample_rate
 			audio.__dict__['path'] = path
 			audio.__dict__['filename'] = name
-		else:
+		elif type.find("aac") >= 0:
+			audio = MP4(path)
+			audio.__dict__['type'] = "mp4"
+#			audio.__dict__['sample_rate'] = audio.info.sample_rate
+			audio.__dict__['path'] = path
+			audio.__dict__['filename'] = name
+		else: 
 			continue
 		filesThisDir.append(audio)
