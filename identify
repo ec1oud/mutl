@@ -1,0 +1,16 @@
+#!/usr/bin/python
+import os
+from os import symlink
+import magic
+from mutagen.easyid3 import EasyID3
+from mutagen.mp3 import MP3
+from mutagen.mp3 import MPEGInfo
+from mutagen.mp4 import MP4
+from mutagen.oggvorbis import OggVorbis
+from mutagen.flac import FLAC
+import sys
+
+msstring = magic.Magic()
+msmime = magic.Magic(mime=True)
+for arg in sys.argv:
+    print arg, msmime.from_file(arg), msstring.from_file(arg)
