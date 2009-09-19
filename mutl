@@ -9,8 +9,23 @@ from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 from mutagen.flac import FLAC
 
-ms = magic.open(magic.MAGIC_NONE)
-ms.load()
+
+#>>> import magic
+#>>> m = magic.Magic()
+#>>> m.from_file("testdata/test.pdf")
+#'PDF document, version 1.2'
+#>>> m.from_buffer(open("testdata/test.pdf").read(1024))
+#'PDF document, version 1.2'
+
+# For MIME types
+#>>> mime = magic.Magic(mime=True)
+#>>> mime.from_file("testdata/test.pdf")
+#'application/pdf'
+
+#ms = magic.open(magic.MAGIC_NONE)
+#ms.load()
+#ms = magic.Magic()
+ms = magic.Magic(mime=True)
 
 sourceDir = "music"
 destDir = "best-quality"
@@ -97,43 +112,43 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 
 	for name in files:
 		path = os.path.join(root, name)
-		type = ms.file(path).lower()
-		#~ print "file of type", type, ":", path
+		type = ms.from_file(path).lower()
+#		print "file of type", type, ":", path
 #		print root, " => ",  name
-		if type.find("mp3") >= 0:
-			try:
+		try:
+			if type.find("mp3") >= 0:
 				audio = EasyID3(path)
-#			print audio.keys()
+	#			print audio.keys()
 				mpinfo = MPEGInfo (open (path))
 				audio.__dict__['type'] = "mp3"
 				audio.__dict__['bitrate'] = mpinfo.bitrate
 				audio.__dict__['path'] = path
 				audio.__dict__['filename'] = name
-			except Exception, e:
-				print path, "is not valid:", e
-				continue;
-#			if "artist" in audio and "title" in audio:
-#				print "mp3", audio["artist"], audio["title"], mpinfo.bitrate
-		elif type.find("ogg") >= 0:
-			audio = OggVorbis(path)
-			audio.__dict__['type'] = "ogg"
-			audio.__dict__['bitrate'] = audio.info.bitrate
-			audio.__dict__['path'] = path
-			audio.__dict__['filename'] = name
-#			if "artist" in audio and "title" in audio:
-#				print "ogg", audio["artist"], audio["title"], audio.info.bitrate
-		elif type.find("flac") >= 0:
-			audio = FLAC(path)
-			audio.__dict__['type'] = "flac"
-#			audio.__dict__['sample_rate'] = audio.info.sample_rate
-			audio.__dict__['path'] = path
-			audio.__dict__['filename'] = name
-		elif type.find("aac") >= 0:
-			audio = MP4(path)
-			audio.__dict__['type'] = "mp4"
-#			audio.__dict__['sample_rate'] = audio.info.sample_rate
-			audio.__dict__['path'] = path
-			audio.__dict__['filename'] = name
-		else: 
-			continue
+	#			if "artist" in audio and "title" in audio:
+	#				print "mp3", audio["artist"], audio["title"], mpinfo.bitrate
+			elif type.find("ogg") >= 0:
+				audio = OggVorbis(path)
+				audio.__dict__['type'] = "ogg"
+				audio.__dict__['bitrate'] = audio.info.bitrate
+				audio.__dict__['path'] = path
+				audio.__dict__['filename'] = name
+	#			if "artist" in audio and "title" in audio:
+	#				print "ogg", audio["artist"], audio["title"], audio.info.bitrate
+			elif type.find("flac") >= 0:
+				audio = FLAC(path)
+				audio.__dict__['type'] = "flac"
+	#			audio.__dict__['sample_rate'] = audio.info.sample_rate
+				audio.__dict__['path'] = path
+				audio.__dict__['filename'] = name
+			elif type.find("aac") >= 0:
+				audio = MP4(path)
+				audio.__dict__['type'] = "mp4"
+	#			audio.__dict__['sample_rate'] = audio.info.sample_rate
+				audio.__dict__['path'] = path
+				audio.__dict__['filename'] = name
+			else: 
+				continue
+		except Exception, e:
+			print path, "is not valid:", e
+			continue;
 		filesThisDir.append(audio)
