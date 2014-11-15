@@ -1,142 +1,108 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 import os
 from os import symlink
-import sys
 import magic
 from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
-from mutagen.mp3 import MPEGInfo
-from mutagen.mp4 import MP4
+#~ from mutagen.mp3 import MPEGInfo
 from mutagen.oggvorbis import OggVorbis
 from mutagen.flac import FLAC
 
+ms = magic.open(magic.MAGIC_NONE)
+ms.load()
 
-#>>> import magic
-#>>> m = magic.Magic()
-#>>> m.from_file("testdata/test.pdf")
-#'PDF document, version 1.2'
-#>>> m.from_buffer(open("testdata/test.pdf").read(1024))
-#'PDF document, version 1.2'
-
-# For MIME types
-#>>> mime = magic.Magic(mime=True)
-#>>> mime.from_file("testdata/test.pdf")
-#'application/pdf'
-
-#ms = magic.open(magic.MAGIC_NONE)
-#ms.load()
-#ms = magic.Magic()
-ms = magic.Magic(mime=True)
-
-def usage(prog):
-	print "usage:", prog, "source-dir dest-dir"
-	print "   e.g.", prog, "music best-quality"
-	print "   dest-dir should be empty, or else will be created if it does not yet exist"
-	sys.exit(1)
-
-def mkdirhier(dir):
-	try:
-		os.makedirs(dir)
-	except OSError, e:
-		if e.errno != 17: raise e
-
-def worse(list, idx1, idx2):
-	"""return whichever is "worse" of these two, or -1 if they are incomparable"""
-	audio1 = list[idx1];
-	audio2 = list[idx2];
-	if "artist" in audio1 and "title" in audio1 and \
-		"artist" in audio2 and "title" in audio2 and \
-		audio1["artist"] == audio2["artist"] and audio1["title"] == audio2["title"]:
-		if audio1.__dict__['type'] == "flac":
-			return idx2;
-		elif audio2.__dict__['type'] == "flac":
-			return idx1;
-		elif audio1.__dict__['bitrate'] > audio2.__dict__['bitrate']:
-			return idx2;
-		elif audio2.__dict__['bitrate'] > audio1.__dict__['bitrate']:
-			return idx1;
-		elif audio1.__dict__['type'] == "ogg":
-			return idx2;
-		elif audio2.__dict__['type'] == "ogg":
-			return idx1;
-	return -1
-
-def isSlash(c): 
-	return c == "/"
-
-def countSlashes(str):
-	return len(filter(isSlash, str))
-
-argc = len(sys.argv)
-if argc != 3:
-	usage(sys.argv[0])
-
-sourceDir = sys.argv[1] # "music"
-destDir = sys.argv[2] # "best-quality"
+sourceDir = "music"
+destDir = "best-quality"
 if (sourceDir[-1] != '/'):
 	sourceDir += '/'
 if (destDir[-1] != '/'):
 	destDir += '/'
 sourceDirLen = len(sourceDir)
 
+def mkdirhier(dir):
+	try:
+		os.makedirs(dir)
+	except OSError as e:
+		if e.errno != 17: raise e
+
+def worse(audio1, audio2):
+	"""return whichever is "worse" of these two, or False if they are incomparable"""
+	if "artist" in audio1 and "title" in audio1 and "artist" in audio2 and "title" in audio2 and audio1["artist"] == audio2["artist"] and audio1["title"] == audio2["title"]:
+		if audio1.__dict__['type'] == "flac":
+			return audio2;
+		elif audio2.__dict__['type'] == "flac":
+			return audio1;
+		elif audio1.__dict__['bitrate'] > audio2.__dict__['bitrate']:
+			return audio2;
+		elif audio2.__dict__['bitrate'] > audio1.__dict__['bitrate']:
+			return audio1;
+		elif audio1.__dict__['type'] == "ogg":
+			return audio2;
+		elif audio2.__dict__['type'] == "ogg":
+			return audio1;
+	return False
+
+def countSlashes(str):
+	return str.count('/')
+
+def deduplicate(seq):
+    seen = set()
+    seen_add = seen.add
+    return [ x for x in seq if not (x in seen or seen_add(x))]
+
 filesThisDir = []
 thisDir = ""
 for root, dirs, files in os.walk(sourceDir, topdown=False):
-	if root != thisDir:
-		if thisDir:
-			print thisDir
-			toRemove = []
-			for i, audio in enumerate(filesThisDir):
-				if i in toRemove:
-					continue
-				#~ print "   ", i, audio, audio.__dict__['type']
-				remaining = filesThisDir[i+1:]
-				for j, other in enumerate(remaining):
-					#~ print "      ", j, other, other.__dict__['type']
-					theWorse = worse(filesThisDir, i, j + i + 1);
-					if theWorse >= 0:
-						#~ print "         the worse:", theWorse
-						if theWorse in toRemove:
-							continue
-						toRemove.append(theWorse)
-						if theWorse == i:
-							break
-			toRemove.sort(reverse=True)
-#			print toRemove
-#			for i, audio in enumerate(filesThisDir):
-#				print "   ", i, "\t", audio.__dict__['type'], "\t", audio.__dict__['filename']
-			for i in toRemove:
-#				print "         removing worse file: ", filesThisDir[i].__dict__['type'], filesThisDir[i].__dict__['path']
-				if i >= len(filesThisDir):
-					print "this is weird: can't remove", i, "from list of len", len(filesThisDir)
-				else:
-					del filesThisDir[i]
-			subpath = thisDir[sourceDirLen:]
-			for i, audio in enumerate(filesThisDir):
-#				print "   ", i, audio, audio.__dict__['type']
-				destPath = destDir + subpath + "/"
-#				print "   ln ", destPath + audio.__dict__["filename"], " -> ", audio.__dict__['path']
-				mkdirhier(destPath)
-				symlink("../" * countSlashes(audio.__dict__['path']) + audio.__dict__['path'], destPath + audio.__dict__["filename"])
-		filesThisDir = []
-		thisDir = root
-
 	for name in files:
+		if root != thisDir:
+			if thisDir:
+				#~ print("dir", thisDir.decode("utf-8", "surrogateescape"))
+				toRemove = []
+				for i, audio in enumerate(filesThisDir):
+#					print("   ", i, audio, audio.__dict__['type'])
+					remaining = filesThisDir[i+1:]
+					for j, other in enumerate(remaining):
+#						print("      ", j, other, other.__dict__['type'])
+						theWorse = worse(audio, other)
+						if theWorse:
+#							print("         the worse:", theWorse.__dict__['type'], theWorse.__dict__['path'], "at idx", j + i)
+							toRemove.append(j + i + 1)
+				toRemove = deduplicate(sorted(toRemove))
+				toRemove.reverse()
+				#~ print(toRemove, "from", len(filesThisDir), filesThisDir)
+				for i in toRemove:
+#					print("         removing worse file: ", filesThisDir[i].__dict__['type'], filesThisDir[i].__dict__['path'])
+					del filesThisDir[i]
+				subpath = thisDir[sourceDirLen:]
+				for i, audio in enumerate(filesThisDir):
+#					print("   ", i, audio, audio.__dict__['type'])
+					destPath = destDir + subpath + "/"
+					print("   ln ", destPath + audio.__dict__['filename'], " -> ", audio.__dict__['path'])
+					mkdirhier(destPath)
+					symlink("../" * countSlashes(audio.__dict__['path']) + audio.__dict__['path'], destPath + audio.__dict__["filename"])
+			filesThisDir = []
+			thisDir = root
+
 		path = os.path.join(root, name)
-		type = ms.from_file(path).lower()
-#		print "file of type", type, ":", path
-#		print root, " => ",  name
+		#~ print("file", path)
 		try:
-			if type.find("mpeg") >= 0 or type.find("mp3") >= 0:
+			type = ms.file(path).lower()
+			#~ print(path, "type", type)
+			if type.find("id3") >= 0:
 				audio = EasyID3(path)
-#				print audio.keys()
-				mpinfo = MPEGInfo (open (path))
+	# print(audio.keys())
+				try:
+					mpinfo = MP3(path)
+				except:
+					continue
+				audio.__dict__['bitrate'] = mpinfo.info.bitrate
 				audio.__dict__['type'] = "mp3"
-				audio.__dict__['bitrate'] = mpinfo.bitrate
 				audio.__dict__['path'] = path
 				audio.__dict__['filename'] = name
+				#~ audio.pprint()
 	#			if "artist" in audio and "title" in audio:
-	#				print "mp3", audio["artist"], audio["title"], mpinfo.bitrate
+	#				print("mp3", audio["artist"], audio["title"], mpinfo.bitrate)
+	#			print(root, " => ",  name)
 			elif type.find("ogg") >= 0:
 				audio = OggVorbis(path)
 				audio.__dict__['type'] = "ogg"
@@ -144,22 +110,15 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 				audio.__dict__['path'] = path
 				audio.__dict__['filename'] = name
 	#			if "artist" in audio and "title" in audio:
-	#				print "ogg", audio["artist"], audio["title"], audio.info.bitrate
+	#				print("ogg", audio["artist"], audio["title"], audio.info.bitrate)
 			elif type.find("flac") >= 0:
 				audio = FLAC(path)
 				audio.__dict__['type'] = "flac"
 	#			audio.__dict__['sample_rate'] = audio.info.sample_rate
 				audio.__dict__['path'] = path
 				audio.__dict__['filename'] = name
-			elif type.find("mp4") >= 0 or type.find("aac") >= 0:
-				audio = MP4(path)
-				audio.__dict__['type'] = "mp4"
-	#			audio.__dict__['sample_rate'] = audio.info.sample_rate
-				audio.__dict__['path'] = path
-				audio.__dict__['filename'] = name
-			else: 
+			else:
 				continue
-		except Exception, e:
-			print path, "is not valid:", e
-			continue;
-		filesThisDir.append(audio)
+			filesThisDir.append(audio)
+		except:
+			continue
