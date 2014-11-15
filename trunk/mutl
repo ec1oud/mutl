@@ -1,18 +1,22 @@
 #!/usr/bin/python3
 import os
-from os import symlink
+import sys
 import magic
 from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
-#~ from mutagen.mp3 import MPEGInfo
+from mutagen.mp4 import MP4
 from mutagen.oggvorbis import OggVorbis
 from mutagen.flac import FLAC
 
 ms = magic.open(magic.MAGIC_NONE)
 ms.load()
 
-sourceDir = "music"
-destDir = "best-quality"
+if (len(sys.argv) < 3):
+	print("Usage: mutl source-dir dest-dir\n    (dest dir will be created so must not exist yet)\n")
+	exit()
+
+sourceDir = sys.argv[1]
+destDir = sys.argv[2]
 if (sourceDir[-1] != '/'):
 	sourceDir += '/'
 if (destDir[-1] != '/'):
@@ -40,6 +44,10 @@ def worse(audio1, audio2):
 			return audio2;
 		elif audio2.__dict__['type'] == "ogg":
 			return audio1;
+		elif audio1.__dict__['type'] == "aac":
+			return audio2;
+		elif audio2.__dict__['type'] == "aac":
+			return audio1;
 	return False
 
 def countSlashes(str):
@@ -54,34 +62,33 @@ filesThisDir = []
 thisDir = ""
 for root, dirs, files in os.walk(sourceDir, topdown=False):
 	for name in files:
-		if root != thisDir:
-			if thisDir:
-				#~ print("dir", thisDir.decode("utf-8", "surrogateescape"))
-				toRemove = []
-				for i, audio in enumerate(filesThisDir):
-#					print("   ", i, audio, audio.__dict__['type'])
-					remaining = filesThisDir[i+1:]
-					for j, other in enumerate(remaining):
+		if thisDir:
+			#~ print("dir", thisDir.decode("utf-8", "surrogateescape"))
+			toRemove = []
+			for i, audio in enumerate(filesThisDir):
+#				 print("   ", i, audio, audio.__dict__['type'])
+				remaining = filesThisDir[i+1:]
+				for j, other in enumerate(remaining):
 #						print("      ", j, other, other.__dict__['type'])
-						theWorse = worse(audio, other)
-						if theWorse:
+					theWorse = worse(audio, other)
+					if theWorse:
 #							print("         the worse:", theWorse.__dict__['type'], theWorse.__dict__['path'], "at idx", j + i)
-							toRemove.append(j + i + 1)
-				toRemove = deduplicate(sorted(toRemove))
-				toRemove.reverse()
-				#~ print(toRemove, "from", len(filesThisDir), filesThisDir)
-				for i in toRemove:
+						toRemove.append(j + i + 1)
+			toRemove = deduplicate(sorted(toRemove))
+			toRemove.reverse()
+			#~ print(toRemove, "from", len(filesThisDir), filesThisDir)
+			for i in toRemove:
 #					print("         removing worse file: ", filesThisDir[i].__dict__['type'], filesThisDir[i].__dict__['path'])
-					del filesThisDir[i]
-				subpath = thisDir[sourceDirLen:]
-				for i, audio in enumerate(filesThisDir):
-#					print("   ", i, audio, audio.__dict__['type'])
-					destPath = destDir + subpath + "/"
-					print("   ln ", destPath + audio.__dict__['filename'], " -> ", audio.__dict__['path'])
-					mkdirhier(destPath)
-					symlink("../" * countSlashes(audio.__dict__['path']) + audio.__dict__['path'], destPath + audio.__dict__["filename"])
-			filesThisDir = []
-			thisDir = root
+				del filesThisDir[i]
+			subpath = thisDir[sourceDirLen:]
+			for i, audio in enumerate(filesThisDir):
+#				 print("   ", i, audio, audio.__dict__['type'])
+				destPath = destDir + subpath + "/"
+				print("   ln ", destPath + audio.__dict__['filename'], " -> ", audio.__dict__['path'])
+				mkdirhier(destPath)
+				os.symlink("../" * countSlashes(audio.__dict__['path']) + audio.__dict__['path'], destPath + audio.__dict__["filename"])
+		filesThisDir = []
+		thisDir = root
 
 		path = os.path.join(root, name)
 		#~ print("file", path)
@@ -99,10 +106,20 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 				audio.__dict__['type'] = "mp3"
 				audio.__dict__['path'] = path
 				audio.__dict__['filename'] = name
-				#~ audio.pprint()
+#				 print(audio)
+#				 audio.pprint()
 	#			if "artist" in audio and "title" in audio:
 	#				print("mp3", audio["artist"], audio["title"], mpinfo.bitrate)
 	#			print(root, " => ",  name)
+			elif type.find("aac") >= 0:
+				audio = MP4(path)
+				audio['title'] = audio["©nam"]
+				audio['artist'] = audio["©ART"]
+				audio.__dict__['type'] = "aac"
+				audio.__dict__['bitrate'] = audio.info.bitrate
+				audio.__dict__['path'] = path
+				audio.__dict__['filename'] = name
+#				 print(audio)
 			elif type.find("ogg") >= 0:
 				audio = OggVorbis(path)
 				audio.__dict__['type'] = "ogg"
@@ -120,5 +137,6 @@ for root, dirs, files in os.walk(sourceDir, topdown=False):
 			else:
 				continue
 			filesThisDir.append(audio)
-		except:
+		except Exception as e:
+			print("caught", e)
 			continue
